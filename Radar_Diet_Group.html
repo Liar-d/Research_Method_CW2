@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Radar_Diet_Group</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            text-align: center;
+        }
+        #radarChart {
+            margin: auto;
+            width: 750px;
+            height: 600px;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+        .legend text {
+            font-size: 16px;
+            fill: #333;
+        }
+    </style>
+</head>
+<body>
+    <h2>Radar chart of the impact of different diets on the environment</h2>
+    <div id="radarChart"></div>
+
+    <!-- Introduce D3.js -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script>
+        // Define a parameter to encapsulate the CSV file link on GitHub
+        const csvUrl = "https://raw.githubusercontent.com/Liar-d/project/refs/heads/main/Data_Diet_Group.csv";
+
+        // Radar image configuration
+        const config = {
+            w: 400, h: 400, 
+            margin: { top: 120, right: 120, bottom: 60, left: 120 },
+            levels: 5, 
+            maxValue: 1,  
+            labelFactor: 1.32,
+            opacityArea: 0.35, 
+            dotRadius: 6,
+            opacityCircles: 0.1, 
+            strokeWidth: 2, 
+            roundStrokes: true,
+            colors: d3.schemeCategory10
+        };
+
+        // Read CSV data
+        d3.csv(csvUrl).then(function(data) {
+            // Get all indicator fields (excluding diet_group)
+            const keys = Object.keys(data[0]).filter(k => k !== "diet_group");
+
+            // Normalized data (0.2 - 0.8 normalization)
+            function normalize(column) {
+                const values = data.map(d => +d[column]);
+                const minVal = d3.min(values);
+                const maxVal = d3.max(values);
+                return data.map(d => ({ diet_group: d.diet_group, [column]: (d[column] - minVal) / (maxVal - minVal) * 0.6 + 0.2 }));
+            }
+
+            let normalizedData = {};
+            keys.forEach(key => {
+                normalize(key).forEach((d, i) => {
+                    if (!normalizedData[d.diet_group]) normalizedData[d.diet_group] = { diet_group: d.diet_group };
+                    normalizedData[d.diet_group][key] = d[key];
+                });
+            });
+
+            // Convert to array format
+            const groupedData = Object.values(normalizedData);
+
+            // Calculate the angle
+            const total = keys.length;
+            const angleSlice = (Math.PI * 2) / total;
+            const radius = Math.min(config.w / 2, config.h / 2);
+
+            // Create SVG Canvas
+            const svg = d3.select("#radarChart").append("svg")
+                .attr("width", config.w + config.margin.left + config.margin.right)
+                .attr("height", config.h + config.margin.top + config.margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${config.w / 2 + config.margin.left}, ${config.h / 2 + config.margin.top})`);
+
+            // Draw grid circles
+            const axisGrid = svg.append("g").attr("class", "axisWrapper");
+            for (let level = 0; level < config.levels; level++) {
+                let rLevel = radius * ((level + 1) / config.levels);
+                axisGrid.append("circle")
+                    .attr("class", "gridCircle")
+                    .attr("r", rLevel)
+                    .style("fill", "#CDCDCD")
+                    .style("stroke", "#CDCDCD")
+                    .style("fill-opacity", config.opacityCircles);
+            }
+
+            // Draw indicator axis and labels
+            const axis = axisGrid.selectAll(".axis")
+                .data(keys)
+                .enter().append("g")
+                .attr("class", "axis");
+
+            axis.append("line")
+                .attr("x1", 0).attr("y1", 0)
+                .attr("x2", (d, i) => radius * Math.cos(angleSlice * i - Math.PI/2))
+                .attr("y2", (d, i) => radius * Math.sin(angleSlice * i - Math.PI/2))
+                .style("stroke", "grey").style("stroke-width", "1px");
+
+            axis.append("text")
+                .attr("class", "legend")
+                .attr("x", (d, i) => (radius * config.labelFactor) * Math.cos(angleSlice * i - Math.PI/2))
+                .attr("y", (d, i) => (radius * config.labelFactor) * Math.sin(angleSlice * i - Math.PI/2))
+                .attr("text-anchor", "middle").style("font-size", "18px")
+                .text(d => d);
+
+            // Define radar line generator
+            const radarLine = d3.lineRadial()
+                .curve(config.roundStrokes ? d3.curveCardinalClosed : d3.curveLinearClosed)
+                .radius(d => d.value * radius)
+                .angle((d, i) => i * angleSlice);
+
+            // Draw radar map area
+            const blobWrapper = svg.selectAll(".radarWrapper")
+                .data(groupedData)
+                .enter().append("g")
+                .attr("class", "radarWrapper");
+
+            blobWrapper.append("path")
+                .attr("class", "radarArea")
+                .attr("d", function(d) {
+                    return radarLine(keys.map(key => ({ axis: key, value: d[key] })));
+                })
+                .style("fill", (d, i) => config.colors[i])
+                .style("fill-opacity", config.opacityArea)
+                .style("stroke", (d, i) => config.colors[i])
+                .style("stroke-width", "4px");
+            
+            // Add data points
+            blobWrapper.append("g")
+                .selectAll(".radarPoint")
+                .data(function(d) {
+                    return keys.map(function(key, i) {
+                        // Assign color based on diet group
+                        return { axis: key, value: d[key], angle: angleSlice * i, color: config.colors[groupedData.indexOf(d)] }; 
+                    });
+                })
+                .enter().append("circle")
+                .attr("class", "radarPoint")
+                .attr("r", config.dotRadius)
+                .attr("cx", function(d) {
+                    return radius * d.value * Math.cos(d.angle - Math.PI / 2);
+                })
+                .attr("cy", function(d) {
+                    return radius * d.value * Math.sin(d.angle - Math.PI / 2);
+                })
+                .style("fill", function(d) {
+                    return d.color; // Use the assigned color for the data points
+                })
+                .style("fill-opacity", 0.8);
+
+            // Add legend
+            const legend = svg.append("g")
+                .attr("transform", `translate(${radius + 33}, -${radius + 80})`);
+
+            const legendItems = legend.selectAll(".legendItem")
+                .data(groupedData)
+                .enter().append("g")
+                .attr("class", "legendItem")
+                .attr("transform", (d, i) => `translate(0, ${i * 25})`);
+
+            legendItems.append("rect")
+                .attr("x", 0).attr("y", 0)
+                .attr("width", 18).attr("height", 18)
+                .style("fill", (d, i) => config.colors[i]);
+
+            legendItems.append("text")
+                .attr("x", 25).attr("y", 12)
+                .style("font-size", "16px")
+                .text(d => d.diet_group);
+        }).catch(function(error) {
+            console.log("Error loading CSV data: " + error);
+        });
+    </script>
+</body>
+</html>
