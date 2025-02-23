@@ -30,7 +30,7 @@
     <script src="https://d3js.org/d3.v5.min.js"></script>
     <script>
         // Define a parameter to encapsulate the CSV file link on GitHub
-        const csvUrl = "https://raw.githubusercontent.com/Liar-d/project/refs/heads/main/Data_Diet_Group.csv";
+        const csvUrl = "https://raw.githubusercontent.com/Liar-d/Research_Method_CW2/refs/heads/main/Data_Diet_Group.csv";
 
         // Radar image configuration
         const config = {
@@ -155,7 +155,7 @@
                     return radius * d.value * Math.sin(d.angle - Math.PI / 2);
                 })
                 .style("fill", function(d) {
-                    return d.color; // Use the assigned color for the data points
+                    return d.color; 
                 })
                 .style("fill-opacity", 0.8);
 
